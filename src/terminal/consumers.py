@@ -142,7 +142,7 @@ class TerminalConsumer(AsyncJsonWebsocketConsumer):
             A JSON response to the client indicating the result of the connection attempt.
             In case of failure, appropriate error messages are sent.
         """
-
+        print(data)
         host = data.get("host")
         port = data.get("port", DEFAULT_SSH_PORT)
         username = data.get("username")
@@ -151,7 +151,9 @@ class TerminalConsumer(AsyncJsonWebsocketConsumer):
         self.connection = ConnectionSSH()
 
         try:
-            self.connection.connect_to_device(host, username, password, port)
+            self.connection.connect_to_device(
+                host, username, password, port or DEFAULT_SSH_PORT
+            )
         except paramiko.AuthenticationException:
             await self.send_error(ErrorCodes.CONNECTION_FAILED, "Authentication error!")
             return

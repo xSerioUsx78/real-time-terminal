@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Real-Time SSH Terminal</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        background-color: black;
+      }
+      label {
+        color: white;
+      }
+      input {
+        background-color: transparent; /* Transparent input background */
+        border: none;
+        outline: none;
+        color: white;
+        font-family: inherit;
+        font-size: inherit;
+        caret-color: white;
+        min-width: 1000px;
+      }
+      input[type="number"]::-webkit-inner-spin-button,
+      input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      input[type="number"] {
+        -moz-appearance: textfield;
+      }
+      #terminal {
+        visibility: hidden;
+        width: 100%;
+        height: 100%;
+      }
+      .wrapper {
+        display: flex;
+        gap: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div style="width: 100%; height: 100%; padding: 10px">
+      <div style="margin-bottom: 10px" id="form-wrapper">
+        <div class="wrapper" id="host-wrapper">
+          <label for="host">Hostname: </label>
+          <input
+            name="host"
+            class="input"
+            type="text"
+            id="host"
+            autofocus="on"
+          />
+        </div>
+        <div class="wrapper" id="port-wrapper" style="display: none">
+          <label for="port">Port (Default 22): </label>
+          <input class="input" type="number" id="port" />
+        </div>
+        <div class="wrapper" id="user-wrapper" style="display: none">
+          <label for="user">User: </label>
+          <input class="input" name="user" type="text" id="user" />
+        </div>
+        <div class="wrapper" id="password-wrapper" style="display: none">
+          <label for="password">Password: </label>
+          <input
+            class="input"
+            type="password"
+            id="password"
+            autocomplete="new-password"
+          />
+        </div>
+      </div>
+      <div id="terminal"></div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    <script>
+      var webSocket;
+      function newSocketConnection() {
+        var url = `ws://${window.location.host}/ws/terminal/`;
+        webSocket = new WebSocket(url);
+      }
+      newSocketConnection();
+
+      var terminalWrapper = document.getElementById("terminal");
+      var term, fitAddon;
+
+      function loadXtermJS() {
+        term = new Terminal();
+        fitAddon = new FitAddon.FitAddon();
+
+        term.loadAddon(fitAddon);
+
+        window.addEventListener("resize", () => {
+          fitAddon.fit();
+        });
+
+        term.open(terminalWrapper);
+      }
+      loadXtermJS();
+
+      var hostValue, portValue, userValue, passwordValue;
+
+      var hostInput = document.getElementById("host");
+      var portInput = document.getElementById("port");
+      var userInput = document.getElementById("user");
+      var passwordInput = document.getElementById("password");
+
+      var hostWrapper = document.getElementById("host-wrapper");
+      var portWrapper = document.getElementById("port-wrapper");
+      var userWrapper = document.getElementById("user-wrapper");
+      var passwordWrapper = document.getElementById("password-wrapper");
+
+      function handleFormInputs() {
+        hostWrapper.addEventListener("keydown", (e) => {
+          if (e.keyCode === 13) {
+            hostValue = hostInput.value;
+            hostInput.setAttribute("disabled", true);
+            portWrapper.style.display = "block";
+            portInput.focus();
+          }
+        });
+
+        portWrapper.addEventListener("keydown", (e) => {
+          if (e.keyCode === 13) {
+            portValue = portInput.value;
+            portInput.setAttribute("disabled", true);
+            userWrapper.style.display = "block";
+            userInput.focus();
+          }
+        });
+
+        userWrapper.addEventListener("keydown", (e) => {
+          if (e.keyCode === 13) {
+            userValue = userInput.value;
+            userInput.setAttribute("disabled", true);
+            passwordWrapper.style.display = "block";
+            passwordInput.focus();
+          }
+        });
+
+        passwordWrapper.addEventListener("keydown", (e) => {
+          if (e.keyCode === 13) {
+            passwordValue = passwordInput.value;
+            passwordInput.setAttribute("disabled", true);
+            establishSSH();
+          }
+        });
+      }
+      handleFormInputs();
+
+      function establishSSH() {
+        webSocket.send(
+          JSON.stringify({
+            command: "new_connection",
+            data: {
+              host: hostValue,
+              port: portValue,
+              username: userValue,
+              password: passwordValue,
+            },
+          })
+        );
+      }
+
+      term.onData((data) => {
+        var message = {
+          command: "send_command",
+          data: {
+            text: data,
+          },
+        };
+        webSocket.send(JSON.stringify(message));
+      });
+
+      webSocket.onmessage = (e) => {
+        var data = JSON.parse(e.data);
+        if (data.command === "error") {
+          term.write(data.data.message);
+        } else {
+          var terminalWrapperStyles = window.getComputedStyle(terminalWrapper);
+          if (terminalWrapperStyles.visibility === "hidden") {
+            terminalWrapper.style.visibility = "visible";
+            fitAddon.fit();
+          }
+          term.write(data.data.output);
+        }
+      };
+    </script>
+  </body>
+</html>
